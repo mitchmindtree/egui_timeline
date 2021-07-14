@@ -1,0 +1,16 @@
+[package]
+name = "egui_timeline"
+description = "A general timeline widget for egui, intended for working with time-based media and control."
+version = "0.1.0"
+authors = ["mitchmindtree <mail@mitchellnordine.com>"]
+readme = "README.md"
+keywords = ["egui", "timeline", "sequencer", "automation", "daw"]
+repository = "https://github.com/mitchmindtree/egui_timeline.git"
+homepage = "https://github.com/mitchmindtree/egui_timeline"
+edition = "2018"
+
+[dependencies]
+egui = "0.13.1"
+
+[patch.crates-io]
+egui = { git = "https://github.com/mitchmindtree/egui", branch = "plot-patches" }
