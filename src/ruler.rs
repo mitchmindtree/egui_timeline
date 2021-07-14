@@ -158,7 +158,11 @@ impl Steps {
                     continue 'ticks;
                 }
                 let x = ticks / self.ticks_per_point;
-                let step = Step { index_in_bar, ticks, x };
+                let step = Step {
+                    index_in_bar,
+                    ticks,
+                    x,
+                };
                 return Some(step);
             }
         }

@@ -46,7 +46,10 @@ pub fn set(ui: &mut egui::Ui, timeline_rect: egui::Rect, api: &mut dyn Playhead)
     if timeline_rect.x_range().contains(&playhead_x) {
         let visuals = ui.style().interact(&response);
         let radius = 0.0;
-        let stroke = egui::Stroke { width: 0.5, ..visuals.fg_stroke };
+        let stroke = egui::Stroke {
+            width: 0.5,
+            ..visuals.fg_stroke
+        };
         ui.painter().rect(rect, radius, visuals.bg_fill, stroke);
     }
 
