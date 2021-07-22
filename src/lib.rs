@@ -13,7 +13,7 @@ pub mod ruler;
 pub const MIN_STEP_GAP: f32 = 4.0;
 
 /// The implementation required to instantiate a timeline widget.
-pub trait Timeline {
+pub trait TimelineApi {
     /// Access to the ruler info.
     fn musical_ruler_info(&self) -> &dyn ruler::MusicalInfo;
     /// Shift the timeline start by the given number of ticks due to a scroll event.
@@ -43,34 +43,134 @@ impl TimeSig {
     }
 }
 
+/// The top-level timeline widget.
+pub struct Timeline {
+    /// A optional side panel with track headers.
+    ///
+    /// Can be useful for labelling tracks or providing convenient volume, mute, solo, etc style
+    /// widgets.
+    header: Option<f32>,
+}
+
 /// The result of setting the timeline, ready to start laying out tracks.
-pub struct Set {
-    tl: TimelineCtx,
+pub struct Show {
+    tracks: TracksCtx,
     ui: egui::Ui,
+}
+
+/// A context for instantiating tracks, either pinned or unpinned.
+pub struct TracksCtx {
+    /// The rectangle encompassing the entire widget area including both header and timeline and
+    /// both pinned and unpinned track areas.
+    pub full_rect: egui::Rect,
+    /// The rect encompassing the left-hand-side track headers including pinned and unpinned.
+    pub header_full_rect: Option<egui::Rect>,
+    /// Context specific to the timeline (non-header) area.
+    pub timeline: TimelineCtx,
 }
 
 /// Some context for the timeline, providing short-hand for setting some useful widgets.
 pub struct TimelineCtx {
-    /// The rect encompassing the total timeline.
-    full_rect: egui::Rect,
-    /// The rect of the current timeline area.
-    rect: egui::Rect,
-    /// The total number of ticks visible on the timeline.
-    visible_ticks: f32,
+    /// The total visible rect of the timeline area including pinned and unpinned tracks.
+    pub full_rect: egui::Rect,
+    /// The total number of ticks visible on the timeline area.
+    pub visible_ticks: f32,
 }
 
 /// Context for instantiating the playhead after all tracks have been set.
 pub struct SetPlayhead {
-    full_rect: egui::Rect,
+    timeline_rect: egui::Rect,
 }
 
-impl Set {
+impl Timeline {
+    /// Begin building the timeline widget.
+    pub fn new() -> Self {
+        Self {
+            header: None,
+        }
+    }
+
+    /// A optional track header side panel.
+    ///
+    /// Can be useful for labelling tracks or providing convenient volume, mute, solo, etc style
+    /// widgets.
+    pub fn header(mut self, width: f32) -> Self {
+        self.header = Some(width);
+        self
+    }
+
+    /// Set the timeline within the currently available rect.
+    pub fn show(self, ui: &mut egui::Ui, timeline: &mut dyn TimelineApi) -> Show {
+        // The full area including both headers and timeline.
+        let full_rect = ui.available_rect_before_wrap_finite();
+        // The area occupied by the timeline.
+        let mut timeline_rect = full_rect;
+        // The area occupied by track headers.
+        let header_rect = self.header.map(|header_w| {
+            let mut r = full_rect;
+            r.set_width(header_w);
+            timeline_rect.min.x = r.right();
+            r
+        });
+
+        // Check whether or not we should scroll the timeline or zoom.
+        if ui.rect_contains_pointer(timeline_rect) {
+            let delta = ui.input().scroll_delta;
+            if ui.input().raw.modifiers.ctrl {
+                if delta.x != 0.0 || delta.y != 0.0 {
+                    timeline.zoom(delta.y - delta.x);
+                }
+            } else {
+                if delta.x != 0.0 {
+                    let ticks_per_point = timeline.musical_ruler_info().ticks_per_point();
+                    timeline.shift_timeline_start(delta.x * ticks_per_point);
+                }
+            }
+        }
+
+        // Draw the background.
+        let vis = ui.style().noninteractive();
+        let bg_stroke = egui::Stroke {
+            width: 0.0,
+            ..vis.bg_stroke
+        };
+        ui.painter().rect(full_rect, 0.0, vis.bg_fill, bg_stroke);
+
+        // The child widgets.
+        let layout = egui::Layout::top_down(egui::Align::Min);
+        let info = timeline.musical_ruler_info();
+        let visible_ticks = info.ticks_per_point() * timeline_rect.width();
+        let timeline = TimelineCtx {
+            full_rect: timeline_rect,
+            visible_ticks,
+        };
+        let tracks = TracksCtx {
+            full_rect,
+            header_full_rect: header_rect,
+            timeline,
+        };
+        let ui = ui.child_ui(full_rect, layout);
+        Show { tracks, ui }
+    }
+}
+
+/// Relevant information for displaying a background for the timeline.
+pub struct BackgroundCtx<'a> {
+    pub header_full_rect: Option<egui::Rect>,
+    pub timeline: &'a TimelineCtx,
+}
+
+impl Show {
     /// Allows for drawing some widgets in the background before showing the grid.
     ///
     /// Can be useful for subtly colouring different ranges, etc.
-    pub fn background(mut self, background: impl FnOnce(&TimelineCtx, &mut egui::Ui)) -> Self {
-        let Set { ref mut ui, ref tl } = self;
-        ui.scope(|ui| background(tl, ui));
+    pub fn background(mut self, background: impl FnOnce(&BackgroundCtx, &mut egui::Ui)) -> Self {
+        let Show { ref mut ui, ref tracks } = self;
+        let bg = BackgroundCtx {
+            header_full_rect: tracks.header_full_rect,
+            timeline: &tracks.timeline,
+        };
+        background(&bg, ui);
         self
     }
 
@@ -83,7 +183,8 @@ impl Set {
         let bar_color = stroke.color.linear_multiply(0.5);
         let step_even_color = stroke.color.linear_multiply(0.25);
         let step_odd_color = stroke.color.linear_multiply(0.125);
-        let visible_len = self.tl.rect.width();
+        let tl_rect = self.tracks.timeline.full_rect;
+        let visible_len = tl_rect.width();
         let mut steps = ruler::Steps::new(info, visible_len, MIN_STEP_GAP);
         while let Some(step) = steps.next(info) {
             stroke.color = match step.index_in_bar {
@@ -91,9 +192,9 @@ impl Set {
                 n if n % 2 == 0 => step_even_color,
                 _ => step_odd_color,
             };
-            let x = self.tl.rect.left() + step.x;
-            let a = egui::Pos2::new(x, self.tl.rect.top());
-            let b = egui::Pos2::new(x, self.tl.rect.bottom());
+            let x = tl_rect.left() + step.x;
+            let a = egui::Pos2::new(x, tl_rect.top());
+            let b = egui::Pos2::new(x, tl_rect.bottom());
             self.ui.painter().line_segment([a, b], stroke);
         }
         self
@@ -102,13 +203,15 @@ impl Set {
     /// Set some tracks that should be pinned to the top.
     ///
     /// Often useful for the ruler or other tracks that should always be visible.
-    pub fn pinned_tracks(mut self, tracks: impl FnOnce(&TimelineCtx, &mut egui::Ui)) -> Self {
-        let Self { ref mut ui, ref tl } = self;
+    pub fn pinned_tracks(mut self, tracks_fn: impl FnOnce(&TracksCtx, &mut egui::Ui)) -> Self {
+        let Self { ref mut ui, ref tracks } = self;
 
         // Use no spacing by default so we can get exact position for line separator.
         let space_y = ui.style().spacing.item_spacing.y;
         ui.style_mut().spacing.item_spacing.y = 0.0;
-        ui.scope(|ui| tracks(tl, ui));
+        ui.scope(|ui| {
+            tracks_fn(tracks, ui)
+        });
 
         // Draw a line to mark end of the pinned tracks.
         let remaining = ui.available_rect_before_wrap_finite();
@@ -122,8 +225,9 @@ impl Set {
 
         // Return to default spacing.
         ui.style_mut().spacing.item_spacing.y = space_y;
-        self.tl.rect = ui.available_rect_before_wrap_finite();
-        self.ui.set_clip_rect(self.tl.rect);
+        let rect = ui.available_rect_before_wrap_finite();
+        //self.tl.rect = ui.available_rect_before_wrap_finite();
+        self.ui.set_clip_rect(rect);
         self
     }
 
@@ -134,48 +238,74 @@ impl Set {
     /// timeline.
     pub fn tracks(
         mut self,
-        tracks: impl FnOnce(&TimelineCtx, egui::Rect, &mut egui::Ui),
+        tracks_fn: impl FnOnce(&TracksCtx, egui::Rect, &mut egui::Ui),
     ) -> SetPlayhead {
-        let Self { ref mut ui, ref tl } = self;
-        egui::ScrollArea::from_max_height(tl.rect.height())
+        let Self { ref mut ui, ref tracks } = self;
+        let rect = ui.available_rect_before_wrap_finite();
+        egui::ScrollArea::from_max_height(rect.height())
             .enable_scrolling(!ui.input().modifiers.ctrl)
-            .show_viewport(ui, |ui, view| tracks(tl, view, ui));
-        let full_rect = tl.full_rect();
-        SetPlayhead { full_rect }
+            .show_viewport(ui, |ui, view| tracks_fn(tracks, view, ui));
+        let timeline_rect = tracks.timeline.full_rect;
+        SetPlayhead { timeline_rect }
     }
 }
 
 impl SetPlayhead {
     /// Instantiate the playhead over the top of the whole timeline.
     pub fn playhead(&self, ui: &mut egui::Ui, info: &mut dyn Playhead) -> egui::Response {
-        playhead::set(ui, self.full_rect, info)
+        playhead::set(ui, self.timeline_rect, info)
+    }
+}
+
+/// A type used to assist with setting a track with an optional `header`.
+pub struct TrackCtx<'a> {
+    tracks: &'a TracksCtx,
+    ui: &'a mut egui::Ui,
+    available_rect: egui::Rect,
+    header_height: f32,
+}
+
+impl<'a> TrackCtx<'a> {
+    /// UI for the track's header.
+    pub fn header(mut self, header: impl FnOnce(&mut egui::Ui)) -> Self {
+        let header_h = self.tracks.header_full_rect.map(|mut rect| {
+            rect.min.y = self.available_rect.min.y;
+            let ui = &mut self.ui.child_ui(rect, *self.ui.layout());
+            header(ui);
+            ui.min_rect().height()
+        }).unwrap_or(0.0);
+        self.header_height = header_h;
+        self
+    }
+
+    /// Set the track, with a function for instantiating contents for the timeline.
+    pub fn show(self, track: impl FnOnce(&TimelineCtx, &mut egui::Ui)) {
+        // The UI and area for the track timeline.
+        let track_h = {
+            let mut rect = self.tracks.timeline.full_rect;
+            rect.min.y = self.available_rect.min.y;
+            let ui = &mut self.ui.child_ui(rect, *self.ui.layout());
+            track(&self.tracks.timeline, ui);
+            ui.min_rect().height()
+        };
+        self.ui.add_space(self.header_height.max(track_h));
+    }
+}
+
+impl TracksCtx {
+    /// Begin showing the next `Track`.
+    pub fn next<'a>(&'a self, ui: &'a mut egui::Ui) -> TrackCtx<'a> {
+        let available_rect = ui.available_rect_before_wrap_finite();
+        TrackCtx {
+            tracks: self,
+            ui,
+            available_rect,
+            header_height: 0.0,
+        }
     }
 }
 
 impl TimelineCtx {
-    /// Instantiate the playhead over the current area.
-    ///
-    /// Useful if you only want the playhead over some tracks. Otherwise, use the `SetPlayhead`
-    /// context returned by the `tracks` method to set the playhead over the full timeline.
-    pub fn playhead(&self, ui: &mut egui::Ui, info: &mut dyn Playhead) -> egui::Response {
-        playhead::set(ui, self.rect, info)
-    }
-
-    /// The rectangle encompassing the current remaining area of the timeline.
-    ///
-    /// - For the `pinned_tracks` function, this is the whole timeline.
-    /// - For the `tracks` function, this is the remainder of the timeline following the
-    ///   `pinned_tracks` area.
-    pub fn rect(&self) -> egui::Rect {
-        self.rect
-    }
-
-    /// The rectangle encompassing the entire timeline area including both pinned and regular
-    /// track areas.
-    pub fn full_rect(&self) -> egui::Rect {
-        self.full_rect
-    }
-
     /// The number of visible ticks across the width of the timeline.
     pub fn visible_ticks(&self) -> f32 {
         self.visible_ticks
@@ -185,7 +315,7 @@ impl TimelineCtx {
     ///
     /// The same as `egui::plot::Plot::new`, but sets some useful defaults before returning.
     pub fn plot_ticks(&self, id_source: impl Hash, y: RangeInclusive<f32>) -> plot::Plot {
-        let h = 64.0;
+        let h = 72.0;
         plot::Plot::new(id_source)
             .allow_zoom(false)
             .allow_drag(false)
@@ -200,45 +330,4 @@ impl TimelineCtx {
             .show_axes(false)
             .height(h)
     }
-}
-
-/// Set the timeline within the currently available rect.
-pub fn set(ui: &mut egui::Ui, timeline: &mut dyn Timeline) -> Set {
-    // The area of the timeline.
-    let rect = ui.available_rect_before_wrap_finite();
-
-    // Check whether or not we should scroll the timeline or zoom.
-    if ui.rect_contains_pointer(rect) {
-        let delta = ui.input().scroll_delta;
-        if ui.input().raw.modifiers.ctrl {
-            if delta.x != 0.0 || delta.y != 0.0 {
-                timeline.zoom(delta.y - delta.x);
-            }
-        } else {
-            if delta.x != 0.0 {
-                let ticks_per_point = timeline.musical_ruler_info().ticks_per_point();
-                timeline.shift_timeline_start(delta.x * ticks_per_point);
-            }
-        }
-    }
-
-    // Draw the background.
-    let vis = ui.style().noninteractive();
-    let bg_stroke = egui::Stroke {
-        width: 0.0,
-        ..vis.bg_stroke
-    };
-    ui.painter().rect(rect, 0.0, vis.bg_fill, bg_stroke);
-
-    // The child widgets.
-    let layout = egui::Layout::top_down(egui::Align::Min);
-    let info = timeline.musical_ruler_info();
-    let visible_ticks = info.ticks_per_point() * rect.width();
-    let tl = TimelineCtx {
-        full_rect: rect,
-        rect,
-        visible_ticks,
-    };
-    let ui = ui.child_ui(rect, layout);
-    Set { tl, ui }
 }
