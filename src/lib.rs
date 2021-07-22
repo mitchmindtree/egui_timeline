@@ -336,7 +336,7 @@ impl TimelineCtx {
             .show_y(false)
             .legend(plot::Legend::default().position(plot::Corner::LeftTop))
             .show_background(false)
-            .show_axes(false)
+            .show_axes([false; 2])
             .height(h)
     }
 }
