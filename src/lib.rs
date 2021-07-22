@@ -85,9 +85,7 @@ pub struct SetPlayhead {
 impl Timeline {
     /// Begin building the timeline widget.
     pub fn new() -> Self {
-        Self {
-            header: None,
-        }
+        Self { header: None }
     }
 
     /// A optional track header side panel.
@@ -165,7 +163,10 @@ impl Show {
     ///
     /// Can be useful for subtly colouring different ranges, etc.
     pub fn background(mut self, background: impl FnOnce(&BackgroundCtx, &mut egui::Ui)) -> Self {
-        let Show { ref mut ui, ref tracks } = self;
+        let Show {
+            ref mut ui,
+            ref tracks,
+        } = self;
         let bg = BackgroundCtx {
             header_full_rect: tracks.header_full_rect,
             timeline: &tracks.timeline,
@@ -204,14 +205,15 @@ impl Show {
     ///
     /// Often useful for the ruler or other tracks that should always be visible.
     pub fn pinned_tracks(mut self, tracks_fn: impl FnOnce(&TracksCtx, &mut egui::Ui)) -> Self {
-        let Self { ref mut ui, ref tracks } = self;
+        let Self {
+            ref mut ui,
+            ref tracks,
+        } = self;
 
         // Use no spacing by default so we can get exact position for line separator.
         let space_y = ui.style().spacing.item_spacing.y;
         ui.style_mut().spacing.item_spacing.y = 0.0;
-        ui.scope(|ui| {
-            tracks_fn(tracks, ui)
-        });
+        ui.scope(|ui| tracks_fn(tracks, ui));
 
         // Draw a line to mark end of the pinned tracks.
         let remaining = ui.available_rect_before_wrap_finite();
@@ -240,7 +242,10 @@ impl Show {
         mut self,
         tracks_fn: impl FnOnce(&TracksCtx, egui::Rect, &mut egui::Ui),
     ) -> SetPlayhead {
-        let Self { ref mut ui, ref tracks } = self;
+        let Self {
+            ref mut ui,
+            ref tracks,
+        } = self;
         let rect = ui.available_rect_before_wrap_finite();
         egui::ScrollArea::from_max_height(rect.height())
             .enable_scrolling(!ui.input().modifiers.ctrl)
@@ -268,12 +273,16 @@ pub struct TrackCtx<'a> {
 impl<'a> TrackCtx<'a> {
     /// UI for the track's header.
     pub fn header(mut self, header: impl FnOnce(&mut egui::Ui)) -> Self {
-        let header_h = self.tracks.header_full_rect.map(|mut rect| {
-            rect.min.y = self.available_rect.min.y;
-            let ui = &mut self.ui.child_ui(rect, *self.ui.layout());
-            header(ui);
-            ui.min_rect().height()
-        }).unwrap_or(0.0);
+        let header_h = self
+            .tracks
+            .header_full_rect
+            .map(|mut rect| {
+                rect.min.y = self.available_rect.min.y;
+                let ui = &mut self.ui.child_ui(rect, *self.ui.layout());
+                header(ui);
+                ui.min_rect().height()
+            })
+            .unwrap_or(0.0);
         self.header_height = header_h;
         self
     }
