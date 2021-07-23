@@ -211,8 +211,6 @@ impl Show {
         } = self;
 
         // Use no spacing by default so we can get exact position for line separator.
-        let space_y = ui.style().spacing.item_spacing.y;
-        ui.style_mut().spacing.item_spacing.y = 0.0;
         ui.scope(|ui| tracks_fn(tracks, ui));
 
         // Draw a line to mark end of the pinned tracks.
@@ -226,9 +224,7 @@ impl Show {
         ui.add_space(stroke.width);
 
         // Return to default spacing.
-        ui.style_mut().spacing.item_spacing.y = space_y;
         let rect = ui.available_rect_before_wrap_finite();
-        //self.tl.rect = ui.available_rect_before_wrap_finite();
         self.ui.set_clip_rect(rect);
         self
     }
