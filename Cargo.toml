@@ -10,7 +10,4 @@ homepage = "https://github.com/mitchmindtree/egui_timeline"
 edition = "2018"
 
 [dependencies]
-egui = "0.13.1"
-
-[patch.crates-io]
-egui = { git = "https://github.com/mitchmindtree/egui", branch = "plot-patches" }
+egui = "0.14"
