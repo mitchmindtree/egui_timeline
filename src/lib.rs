@@ -100,7 +100,7 @@ impl Timeline {
     /// Set the timeline within the currently available rect.
     pub fn show(self, ui: &mut egui::Ui, timeline: &mut dyn TimelineApi) -> Show {
         // The full area including both headers and timeline.
-        let full_rect = ui.available_rect_before_wrap_finite();
+        let full_rect = ui.available_rect_before_wrap();
         // The area occupied by the timeline.
         let mut timeline_rect = full_rect;
         // The area occupied by track headers.
@@ -214,7 +214,7 @@ impl Show {
         ui.scope(|ui| tracks_fn(tracks, ui));
 
         // Draw a line to mark end of the pinned tracks.
-        let remaining = ui.available_rect_before_wrap_finite();
+        let remaining = ui.available_rect_before_wrap();
         let a = remaining.left_top();
         let b = remaining.right_top();
         let stroke = ui.style().visuals.noninteractive().bg_stroke;
@@ -224,7 +224,7 @@ impl Show {
         ui.add_space(stroke.width);
 
         // Return to default spacing.
-        let rect = ui.available_rect_before_wrap_finite();
+        let rect = ui.available_rect_before_wrap();
         self.ui.set_clip_rect(rect);
         self
     }
@@ -242,8 +242,9 @@ impl Show {
             ref mut ui,
             ref tracks,
         } = self;
-        let rect = ui.available_rect_before_wrap_finite();
-        egui::ScrollArea::from_max_height(rect.height())
+        let rect = ui.available_rect_before_wrap();
+        egui::ScrollArea::vertical()
+            .max_height(rect.height())
             .enable_scrolling(!ui.input().modifiers.ctrl)
             .show_viewport(ui, |ui, view| tracks_fn(tracks, view, ui));
         let timeline_rect = tracks.timeline.full_rect;
@@ -293,14 +294,23 @@ impl<'a> TrackCtx<'a> {
             track(&self.tracks.timeline, ui);
             ui.min_rect().height()
         };
-        self.ui.add_space(self.header_height.max(track_h));
+        // Manually add space occuppied by the child UIs, otherwise `ScrollArea` won't consider the
+        // space occuppied. TODO: Is there a better way to handle this?
+        let w = self.tracks.full_rect.width();
+        let h = self.header_height.max(track_h);
+        self.ui.scope(|ui| {
+            ui.spacing_mut().item_spacing.y = 0.0;
+            ui.spacing_mut().interact_size.y = 0.0;
+            ui.horizontal(|ui| ui.add_space(w));
+            ui.add_space(h);
+        });
     }
 }
 
 impl TracksCtx {
     /// Begin showing the next `Track`.
     pub fn next<'a>(&'a self, ui: &'a mut egui::Ui) -> TrackCtx<'a> {
-        let available_rect = ui.available_rect_before_wrap_finite();
+        let available_rect = ui.available_rect_before_wrap();
         TrackCtx {
             tracks: self,
             ui,
