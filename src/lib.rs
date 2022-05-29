@@ -243,9 +243,10 @@ impl Show {
             ref tracks,
         } = self;
         let rect = ui.available_rect_before_wrap();
+        let enable_scrolling = !ui.input().modifiers.ctrl;
         egui::ScrollArea::vertical()
             .max_height(rect.height())
-            .enable_scrolling(!ui.input().modifiers.ctrl)
+            .enable_scrolling(enable_scrolling)
             .show_viewport(ui, |ui, view| tracks_fn(tracks, view, ui));
         let timeline_rect = tracks.timeline.full_rect;
         SetPlayhead { timeline_rect }
