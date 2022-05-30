@@ -335,6 +335,8 @@ impl TimelineCtx {
         plot::Plot::new(id_source)
             .allow_zoom(false)
             .allow_drag(false)
+            .allow_scroll(false)
+            .allow_boxed_zoom(false)
             .include_x(0.0)
             .include_x(self.visible_ticks)
             .include_y(*y.start())
