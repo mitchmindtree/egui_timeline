@@ -113,8 +113,8 @@ impl Timeline {
 
         // Check whether or not we should scroll the timeline or zoom.
         if ui.rect_contains_pointer(timeline_rect) {
-            let delta = ui.input().scroll_delta;
-            if ui.input().raw.modifiers.ctrl {
+            let delta = ui.input(|i| i.scroll_delta);
+            if ui.input(|i| i.raw.modifiers.ctrl) {
                 if delta.x != 0.0 || delta.y != 0.0 {
                     timeline.zoom(delta.y - delta.x);
                 }
@@ -243,7 +243,7 @@ impl Show {
             ref tracks,
         } = self;
         let rect = ui.available_rect_before_wrap();
-        let enable_scrolling = !ui.input().modifiers.ctrl;
+        let enable_scrolling = !ui.input(|i| i.modifiers.ctrl);
         egui::ScrollArea::vertical()
             .max_height(rect.height())
             .enable_scrolling(enable_scrolling)
