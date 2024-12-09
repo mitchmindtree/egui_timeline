@@ -1,4 +1,4 @@
-use egui::plot;
+use egui_plot as plot;
 use std::{
     hash::Hash,
     ops::{Range, RangeInclusive},
@@ -113,7 +113,7 @@ impl Timeline {
 
         // Check whether or not we should scroll the timeline or zoom.
         if ui.rect_contains_pointer(timeline_rect) {
-            let delta = ui.input(|i| i.scroll_delta);
+            let delta = ui.input(|i| i.smooth_scroll_delta);
             if ui.input(|i| i.raw.modifiers.ctrl) {
                 if delta.x != 0.0 || delta.y != 0.0 {
                     timeline.zoom(delta.y - delta.x);
@@ -147,7 +147,7 @@ impl Timeline {
             header_full_rect: header_rect,
             timeline,
         };
-        let ui = ui.child_ui(full_rect, layout);
+        let ui = ui.new_child(egui::UiBuilder::new().max_rect(full_rect).layout(layout));
         Show { tracks, ui }
     }
 }
@@ -276,7 +276,11 @@ impl<'a> TrackCtx<'a> {
             .header_full_rect
             .map(|mut rect| {
                 rect.min.y = self.available_rect.min.y;
-                let ui = &mut self.ui.child_ui(rect, *self.ui.layout());
+                let ui = &mut self.ui.new_child(
+                    egui::UiBuilder::new()
+                        .max_rect(rect)
+                        .layout(*self.ui.layout()),
+                );
                 header(ui);
                 ui.min_rect().height()
             })
@@ -291,7 +295,11 @@ impl<'a> TrackCtx<'a> {
         let track_h = {
             let mut rect = self.tracks.timeline.full_rect;
             rect.min.y = self.available_rect.min.y;
-            let ui = &mut self.ui.child_ui(rect, *self.ui.layout());
+            let ui = &mut self.ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(rect)
+                    .layout(*self.ui.layout()),
+            );
             track(&self.tracks.timeline, ui);
             ui.min_rect().height()
         };
@@ -333,7 +341,10 @@ impl TimelineCtx {
     pub fn plot_ticks(&self, id_source: impl Hash, y: RangeInclusive<f32>) -> plot::Plot {
         let h = 72.0;
         plot::Plot::new(id_source)
+            .set_margin_fraction(egui::Vec2::ZERO)
+            .show_grid(egui::Vec2b::FALSE)
             .allow_zoom(false)
+            .allow_boxed_zoom(false)
             .allow_drag(false)
             .allow_scroll(false)
             .allow_boxed_zoom(false)

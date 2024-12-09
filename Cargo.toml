@@ -11,4 +11,5 @@ homepage = "https://github.com/mitchmindtree/egui_timeline"
 edition = "2018"
 
 [dependencies]
-egui = "0.22"
+egui = "0.29.1"
+egui_plot = "0.29"

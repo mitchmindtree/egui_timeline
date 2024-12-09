@@ -43,7 +43,7 @@ pub fn set(ui: &mut egui::Ui, timeline_rect: egui::Rect, api: &mut dyn Playhead)
     }
 
     // Draw a thin rect.
-    if timeline_rect.x_range().contains(&playhead_x) {
+    if timeline_rect.x_range().contains(playhead_x) {
         let visuals = ui.style().interact(&response);
         let radius = 0.0;
         let stroke = egui::Stroke {
