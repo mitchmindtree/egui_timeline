@@ -3,6 +3,7 @@ name = "egui_timeline"
 description = "A general timeline widget for egui, for working with time-based media and control."
 version = "0.1.0"
 authors = ["mitchmindtree <mail@mitchellnordine.com>"]
+license = "MIT OR Apache-2.0"
 readme = "README.md"
 keywords = ["egui", "timeline", "sequencer", "automation", "daw"]
 repository = "https://github.com/mitchmindtree/egui_timeline.git"
