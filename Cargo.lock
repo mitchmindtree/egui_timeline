@@ -82,7 +82,7 @@ dependencies = [
 
 [[package]]
 name = "egui_timeline"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "egui",
  "egui_plot",
