@@ -4,7 +4,7 @@ use std::{
     ops::{Range, RangeInclusive},
 };
 
-pub use playhead::Playhead;
+pub use playhead::{Playhead, PlayheadApi};
 pub use ruler::MusicalRuler;
 
 pub mod playhead;
@@ -80,6 +80,10 @@ pub struct TimelineCtx {
 /// Context for instantiating the playhead after all tracks have been set.
 pub struct SetPlayhead {
     timeline_rect: egui::Rect,
+    /// The y position at the bottom of the last track, or the bottom of the
+    /// tracks' scrollable area in the case that the size of the tracks
+    /// exceed the visible height.
+    tracks_bottom: f32,
 }
 
 impl Timeline {
@@ -244,19 +248,33 @@ impl Show {
         } = self;
         let rect = ui.available_rect_before_wrap();
         let enable_scrolling = !ui.input(|i| i.modifiers.ctrl);
-        egui::ScrollArea::vertical()
+        let res = egui::ScrollArea::vertical()
             .max_height(rect.height())
             .enable_scrolling(enable_scrolling)
+            .animated(true)
+            .stick_to_bottom(true) // stick to new tracks as they're added
             .show_viewport(ui, |ui, view| tracks_fn(tracks, view, ui));
         let timeline_rect = tracks.timeline.full_rect;
-        SetPlayhead { timeline_rect }
+        let tracks_bottom = res
+            .inner_rect
+            .bottom()
+            .min(res.inner_rect.top() + res.content_size.y);
+        SetPlayhead {
+            timeline_rect,
+            tracks_bottom,
+        }
     }
 }
 
 impl SetPlayhead {
     /// Instantiate the playhead over the top of the whole timeline.
-    pub fn playhead(&self, ui: &mut egui::Ui, info: &mut dyn Playhead) -> egui::Response {
-        playhead::set(ui, self.timeline_rect, info)
+    pub fn playhead(
+        &self,
+        ui: &mut egui::Ui,
+        info: &mut dyn PlayheadApi,
+        playhead: Playhead,
+    ) -> egui::Response {
+        playhead::set(ui, info, self.timeline_rect, self.tracks_bottom, playhead)
     }
 }
 
